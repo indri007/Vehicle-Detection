@@ -1,0 +1,122 @@
+{
+  "name": "Vehicle Detection Logger & Alerter",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vehicle-detection",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse dan validasi payload dari Streamlit\nconst body = $input.first().json;\n\nconst payload = {\n  timestamp      : body.timestamp || new Date().toISOString(),\n  image_name     : body.image_name || 'unknown',\n  car            : body.detections?.car ?? 0,\n  van            : body.detections?.van ?? 0,\n  bus            : body.detections?.bus ?? 0,\n  total_vehicles : body.total_vehicles ?? 0,\n  avg_confidence : body.avg_confidence ?? 0,\n  alert          : body.alert ? 'YES' : 'NO',\n  alert_message  : body.alert_message || '-'\n};\n\nreturn [{ json: payload }];"
+      },
+      "id": "parse-node",
+      "name": "Parse Payload",
+      "type": "n8n-nodes-base.code",
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp"      : "={{ $json.timestamp }}",
+            "image_name"     : "={{ $json.image_name }}",
+            "car"            : "={{ $json.car }}",
+            "van"            : "={{ $json.van }}",
+            "bus"            : "={{ $json.bus }}",
+            "total_vehicles" : "={{ $json.total_vehicles }}",
+            "avg_confidence" : "={{ $json.avg_confidence }}",
+            "alert"          : "={{ $json.alert }}"
+          }
+        }
+      },
+      "id": "sheets-node",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue"  : "={{ $json.total_vehicles }}",
+              "rightValue" : 10,
+              "operator"   : { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      },
+      "id": "if-node",
+      "name": "Traffic > Threshold?",
+      "type": "n8n-nodes-base.if",
+      "position": [680, 380]
+    },
+    {
+      "parameters": {
+        "chatId"  : "YOUR_TELEGRAM_CHAT_ID",
+        "text"    : "={{ '🚨 HIGH TRAFFIC ALERT\\n\\n' + $json.alert_message + '\\n\\n📊 Detail:\\n🚗 Car: ' + $json.car + '\\n🚐 Van: ' + $json.van + '\\n🚌 Bus: ' + $json.bus + '\\n\\n🕐 ' + $json.timestamp }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-node",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"logged\": true, \"total_vehicles\": {{ $('Parse Payload').first().json.total_vehicles }} }"
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [900, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Payload", "type": "main", "index": 0 }]]
+    },
+    "Parse Payload": {
+      "main": [
+        [
+          { "node": "Log to Google Sheets", "type": "main", "index": 0 },
+          { "node": "Traffic > Threshold?",  "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Traffic > Threshold?": {
+      "main": [
+        [{ "node": "Send Telegram Alert", "type": "main", "index": 0 }],
+        [{ "node": "Respond to Webhook",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Telegram Alert": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

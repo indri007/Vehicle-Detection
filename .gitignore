@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+# app/models/*.pt  # Diizinkan agar best.pt masuk GitHub (hanya 44MB, di bawah limit 100MB)
+app/models/*.onnx
+runs/
+*.egg-info/
+.venv/
+venv/
+node_modules/
